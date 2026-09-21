@@ -1,0 +1,30 @@
+name: Validate Roblox project
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download pinned official Luau and Rojo releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/install_ci_tools.py
+      - name: Compile Luau sources
+        run: find src -name '*.luau' -print0 | xargs -0 -n1 .tools/luau-compile > /dev/null
+      - name: Run pure Luau rules tests
+        run: .tools/luau tests/rules.spec.luau
+      - name: Build the Roblox place
+        run: mkdir -p build && .tools/rojo build default.project.json -o build/AnimeRNG.rbxlx
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AnimeRNG-place
+          path: build/AnimeRNG.rbxlx
+          retention-days: 7

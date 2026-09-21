@@ -1,11 +1,27 @@
-local ReplicatedStorage=game:GetService("ReplicatedStorage")
-local Recipes=require(ReplicatedStorage.Shared.RecipeDatabase)
-local Crafting={}
-function Crafting:Craft(data,recipeId)
- local r=Recipes[recipeId]; if not r then return false,"Unknown recipe" end
- for mat,n in pairs(r.Materials) do if (data.Materials[mat] or 0)<n then return false,"Missing "..mat end end
- for mat,n in pairs(r.Materials) do data.Materials[mat]-=n end
- data.PermanentLuck=(data.PermanentLuck or 0)+r.LuckBonus
- return true,data.PermanentLuck
+local Shared=game:GetService("ReplicatedStorage").Shared
+local Rules=require(Shared.Rules)
+local Recipes=require(Shared.RecipeDatabase)
+local Config=require(Shared.GameConfig)
+local Craft={}
+function Craft:Craft(data,id)
+    if type(id)~="string" then return false,"Invalid recipe" end
+    return Rules.craft(data,Recipes[id])
 end
-return Crafting
+function Craft:Use(data,id)
+    if id=="LuckPotion" then
+        if data.Materials.LuckPotion<1 then return false,"Craft a potion first." end
+        if data.PotionUntil>os.time()+Config.MaxPotionSeconds-Config.PotionSeconds then return false,"One-hour duration cap reached." end
+        data.Materials.LuckPotion=data.Materials.LuckPotion-1
+        data.PotionUntil=math.max(os.time(),data.PotionUntil)+Config.PotionSeconds
+        return true,"Earned luck potion active for 10 more minutes."
+    elseif id=="CharmToken" then
+        if data.SigilsUsed>=10 then return false,"Maximum 10 sigils already bound." end
+        if data.Materials.CharmToken<1 then return false,"No unbound luck sigil." end
+        data.Materials.CharmToken=data.Materials.CharmToken-1
+        data.SigilsUsed=data.SigilsUsed+1
+        data.PermanentLuck=data.PermanentLuck+0.1
+        return true,"Sigil bound: permanent +10% rare-tier weight."
+    end
+    return false,"Unknown item"
+end
+return Craft

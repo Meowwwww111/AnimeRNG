@@ -1,0 +1,30 @@
+-- Data-only configuration. Robux purchases are deliberately OFF until configured/reviewed.
+return {
+    Version = "0.3.0",
+    RollCost = 10,
+    RollCooldown = 1.25,
+    CombatRange = 28,
+    AttackInterval = 1,
+    MaxUnitLevel = 50,
+    StudioPersistence = false,
+    DataStoreName = "AnimeRNG_PlayerData_v1",
+    StudioDataStoreName = "AnimeRNG_Studio_v3",
+    SessionLease = 180,
+    AutoSaveSeconds = 45,
+    PurchasesEnabled = false,
+    LuckPassId = 0,
+    LuckPotionProductId = 0,
+    PaidPassBonus = 0.5,
+    PotionBonus = 1,
+    PotionSeconds = 600,
+    MaxPotionSeconds = 3600,
+    TradeItems = {"Essence", "Crystal", "BossCore", "LuckPotion", "CharmToken"},
+    -- Only session-only Studio trading is implemented; never enable it for live currency.
+    Quests = {
+        {Id="first_roll", Name="First summon", Stat="Rolls", Goal=1, Coins=100},
+        {Id="hunter", Name="Defeat 5 monsters", Stat="Kills", Goal=5, Coins=150, Essence=20},
+        {Id="veteran", Name="Defeat 25 monsters", Stat="Kills", Goal=25, Coins=500, Crystal=10},
+        {Id="collector", Name="Make 50 summons", Stat="Rolls", Goal=50, Coins=750, Crystal=15},
+        {Id="boss", Name="Defeat a world boss", Stat="BossKills", Goal=1, Coins=1000, BossCore=2},
+    },
+}
