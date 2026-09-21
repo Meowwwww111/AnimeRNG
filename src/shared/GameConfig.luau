@@ -1,6 +1,6 @@
 -- Data-only configuration. Robux purchases are deliberately OFF until configured/reviewed.
 return {
-    Version = "0.3.0",
+    Version = "0.4.0",
     RollCost = 10,
     RollCooldown = 1.25,
     CombatRange = 28,

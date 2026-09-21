@@ -3,8 +3,16 @@
   "serveAddress": "127.0.0.1",
   "tree": {
     "$className": "DataModel",
-    "ReplicatedStorage": {"Shared": {"$path": "src/shared"}},
+    "ReplicatedStorage": {
+      "Shared": {"$path": "src/shared"},
+      "ArtAssets": {"$className":"Folder","$ignoreUnknownInstances":true,
+        "Units":{"$className":"Folder","$ignoreUnknownInstances":true},
+        "Enemies":{"$className":"Folder","$ignoreUnknownInstances":true}}
+    },
     "ServerScriptService": {"Server": {"$path": "src/server"}},
-    "StarterPlayer": {"StarterPlayerScripts": {"Client": {"$path": "src/client"}}}
+    "StarterPlayer": {"StarterPlayerScripts": {
+      "Client": {"$path": "src/client"},
+      "Presentation": {"$path": "src/visuals"}
+    }}
   }
 }

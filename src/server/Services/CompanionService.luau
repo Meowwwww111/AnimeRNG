@@ -3,6 +3,7 @@ local Characters=require(Shared.CharacterDatabase)
 local Rarities=require(Shared.RarityConfig)
 local Rules=require(Shared.Rules)
 local Config=require(Shared.GameConfig)
+local Math=require(Shared.PresentationMath)
 local Factory=require(script.Parent.ModelFactory)
 local Service={Entries={}}
 function Service:Remove(player)
@@ -10,19 +11,20 @@ function Service:Remove(player)
     if e then e.Model:Destroy(); self.Entries[player]=nil end
 end
 function Service:Spawn(player,id)
-    local cfg=Characters[id]
-    if not cfg then return end
-    local previous=self.Entries[player]
-    local nextAttack=previous and previous.NextAttack or os.clock()+1
-    local hits=previous and previous.Hits or 0
+    local cfg=Characters[id]; if not cfg then return end
+    local old=self.Entries[player]
+    local nextAttack=old and old.NextAttack or os.clock()+1
+    local hits=old and old.Hits or 0
     self:Remove(player)
-    local rarity=Rarities[cfg.Rarity]
-    local model=Factory.Humanoid(cfg.Name,Factory.Color(cfg.Color),Factory.Color(cfg.Hair),cfg.Weapon,rarity.Rank,0.9)
+    local model=Factory.Actor("Unit",id,cfg,player:GetAttribute("World") or 1)
     model.Name=player.Name.."_Companion"; model:SetAttribute("OwnerUserId",player.UserId)
+    model:SetAttribute("DisplayName",cfg.Name); model:SetAttribute("Rarity",cfg.Rarity)
+    model:SetAttribute("Follow",true)
     local root=player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-    model:PivotTo(root and root.CFrame*CFrame.new(4,0,3) or CFrame.new(0,4,85))
-    model.Parent=workspace.AnimeRNGWorld
-    self.Entries[player]={Model=model,Id=id,NextAttack=nextAttack,Hits=hits,HitUntil=0}
+    local cf=root and root.CFrame*CFrame.new(3.4,0,3.6) or CFrame.new(0,4,85)
+    Factory.Publish(model,cf,false,0)
+    model.Parent=workspace.AnimeRNGWorld; Factory.Register(model)
+    self.Entries[player]={Model=model,Id=id,NextAttack=nextAttack,Hits=hits,HitUntil=0,LastTick=os.clock()}
 end
 function Service:Tick(player,data,monsters,effects)
     local char=player.Character
@@ -32,30 +34,40 @@ function Service:Tick(player,data,monsters,effects)
     local e=self.Entries[player]
     if not e or e.Id~=data.Equipped then self:Spawn(player,data.Equipped); e=self.Entries[player] end
     if not e then return end
+    local now=os.clock(); local dt=math.min(0.5,math.max(0,now-e.LastTick)); e.LastTick=now
     local target=player:GetAttribute("AutoCombat")~=false and monsters:Nearest(player,Config.CombatRange) or nil
-    local goal=root.CFrame*CFrame.new(4,0,4)
+    local desired=root.CFrame*CFrame.new(3.4,0,3.6)
+    local floor=0.3
+    local params=RaycastParams.new(); params.FilterType=Enum.RaycastFilterType.Include
+    params.FilterDescendantsInstances={workspace.AnimeRNGWorld}
+    local hit=workspace:Raycast(desired.Position+Vector3.new(0,5,0),Vector3.new(0,-35,0),params)
+    if hit then floor=hit.Position.Y end
+    local pos=Vector3.new(desired.Position.X,floor+e.Model:GetAttribute("Height"),desired.Position.Z)
+    local goal=CFrame.new(pos)*desired.Rotation
     if target then
-        local targetPos=target.Model.PrimaryPart.Position
-        local away=Vector3.new(root.Position.X-targetPos.X,0,root.Position.Z-targetPos.Z)
+        local tp=target.Model.PrimaryPart.Position
+        local away=Vector3.new(root.Position.X-tp.X,0,root.Position.Z-tp.Z)
         if away.Magnitude<0.1 then away=Vector3.new(1,0,0) end
-        local position=Vector3.new(targetPos.X,root.Position.Y-0.3,targetPos.Z)+away.Unit*(4+target.Config.Scale)
-        goal=CFrame.lookAt(position,Vector3.new(targetPos.X,position.Y,targetPos.Z))
+        pos=Vector3.new(tp.X,0.4+e.Model:GetAttribute("Height"),tp.Z)+away.Unit*(4+target.Config.Scale)
+        goal=CFrame.lookAt(pos,Vector3.new(tp.X,pos.Y,tp.Z))
     end
-    local current=e.Model:GetPivot()
-    local distance=(current.Position-goal.Position).Magnitude
-    e.Model:PivotTo(distance>65 and goal or current:Lerp(goal,0.36))
-    local now=os.clock()
-    if target and now>=e.NextAttack and (e.Model.PrimaryPart.Position-target.Model.PrimaryPart.Position).Magnitude<11+target.Config.Scale then
-        e.NextAttack=now+Config.AttackInterval; e.Hits=e.Hits+1; e.HitUntil=now+0.45
+    e.Model:SetAttribute("World",player:GetAttribute("World") or 1)
+    e.Model:SetAttribute("Follow",target==nil)
+    local current=e.Model:GetPivot(); local distance=(current.Position-goal.Position).Magnitude
+    local cf=distance>70 and goal or current:Lerp(goal,Math.alpha(6.5,dt))
+    -- Pose is cosmetic on clients; attack timing, damage and range remain server-owned.
+    if target and now>=e.NextAttack and (cf.Position-target.Model.PrimaryPart.Position).Magnitude<12+target.Config.Scale*2 then
+        e.NextAttack=now+Config.AttackInterval; e.Hits=e.Hits+1
+        e.HitUntil=workspace:GetServerTimeNow()+0.42
         local cfg=Characters[e.Id]
         local amount=Rules.damage(cfg,Rarities[cfg.Rarity],data.UnitXP[e.Id])
         local skill=e.Hits%5==0
         if skill then amount=math.floor(amount*1.75) end
-        effects:FireAllClients({Kind=skill and "Skill" or "Hit",From=e.Model.PrimaryPart.Position,Position=target.Model.PrimaryPart.Position,Amount=amount,Color=Rarities[cfg.Rarity].Color})
+        effects:FireAllClients({Kind=skill and "Skill" or "Hit",From=cf.Position,
+            Position=target.Model.PrimaryPart.Position,Amount=amount,Color=Rarities[cfg.Rarity].Color})
         monsters:Hit(target,amount,player)
     end
-    local label=e.Model.PrimaryPart:FindFirstChild("Nameplate")
-    if label then label.Text.Text=Characters[e.Id].Name.." ["..Characters[e.Id].Rarity.."]\nLevel "..Rules.level(data.UnitXP[e.Id]) end
-    Factory.Animate(e.Model,now,distance>0.4,now<e.HitUntil)
+    e.Model:SetAttribute("Level",Rules.level(data.UnitXP[e.Id]))
+    Factory.Publish(e.Model,cf,distance>0.35,e.HitUntil)
 end
 return Service
